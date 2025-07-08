@@ -14,26 +14,44 @@ import {
 
 import './styles.css';
 
+// Initialize Segment
 const analytics = createClient({
-  writeKey: 'F3jNWbkBDsRFbrHAiSckIkBLuXwH4Fbn', // replace this with your key
+  writeKey: 'F3jNWbkBDsRFbrHAiSckIkBLuXwH4Fbn', // Replace with your actual key
 });
 
-// Generates a 5-char random string for userId
-function generateUserId() {
-  return Math.random().toString(36).substring(2, 7);
+// Hash email into a consistent user ID
+function hashEmail(email) {
+  if (!email) return null;
+  let hash = 0,
+    i,
+    chr;
+  for (i = 0; i < email.length; i++) {
+    chr = email.charCodeAt(i);
+    hash = (hash << 5) - hash + chr;
+    hash |= 0; // Convert to 32bit integer
+  }
+  return 'user_' + Math.abs(hash);
 }
 
 // Tracks page views only once per location change
 function PageTracker() {
   const analytics = useAnalytics();
   const location = useLocation();
-  const lastPathRef = useRef(null);
+  const lastTrackedPathRef = useRef(null);
+  const initialLoadRef = useRef(true);
 
   useEffect(() => {
-    if (lastPathRef.current === location.pathname) {
-      // Skip duplicate page tracking
-      return;
+    const path = location.pathname;
+
+    // Skip on first render if already tracked
+    if (initialLoadRef.current) {
+      initialLoadRef.current = false;
+      if (lastTrackedPathRef.current === path) {
+        return;
+      }
     }
+
+    if (lastTrackedPathRef.current === path) return;
 
     const pageNameMap = {
       '/': 'Home Page',
@@ -42,12 +60,10 @@ function PageTracker() {
       '/article-racket': 'Racket Guide Page',
     };
 
-    const pageName = pageNameMap[location.pathname] || 'Unknown Page';
-
+    const pageName = pageNameMap[path] || 'Unknown Page';
     console.log('Tracking page view:', pageName);
     analytics.page(pageName);
-
-    lastPathRef.current = location.pathname;
+    lastTrackedPathRef.current = path;
   }, [location, analytics]);
 
   return null;
@@ -67,15 +83,14 @@ function Home({
   const analytics = useAnalytics();
   const navigate = useNavigate();
 
-  // Track article read event when user clicks an article link
-  function handleArticleClick(articlePath, articleName) {
+  const handleArticleClick = (articlePath, articleName) => {
     analytics.track('Article Read', { article: articleName });
     navigate(articlePath);
-  }
+  };
 
   const handleNewsletterSubmit = (e) => {
     e.preventDefault();
-    const newUserId = generateUserId();
+    const newUserId = hashEmail(newsletterEmail);
     setUserId(newUserId);
     analytics.identify(newUserId, { email: newsletterEmail });
     analytics.track('Newsletter Signup', { email: newsletterEmail });
@@ -85,10 +100,10 @@ function Home({
 
   const handlePurchase = (e) => {
     e.preventDefault();
-    const newUserId = userId || generateUserId();
+    const newUserId = hashEmail(purchaseEmail);
     if (!userId) setUserId(newUserId);
     analytics.identify(newUserId, { email: purchaseEmail });
-    analytics.track('Coaching Package Purchased', {
+    analytics.track('Order Completed', {
       package: purchasePackage,
       email: purchaseEmail,
     });
@@ -101,7 +116,6 @@ function Home({
     <div className="container">
       <h1>Ace Tennis Coach</h1>
       <nav>
-        {/* Use buttons that trigger client navigation and track events */}
         <button
           className="link-button"
           onClick={() => handleArticleClick('/', 'Home Page')}
@@ -177,7 +191,7 @@ function Home({
   );
 }
 
-// Articles components
+// Article components
 const ArticleServe = () => (
   <div className="container">
     <h2>Master Your Serve</h2>
@@ -236,4 +250,3 @@ function App() {
 }
 
 export default App;
-
