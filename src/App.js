@@ -14,21 +14,17 @@ import {
 
 import './styles.css';
 
-// Initialize Segment
 const analytics = createClient({
-  writeKey: 'F3jNWbkBDsRFbrHAiSckIkBLuXwH4Fbn', // Replace with your actual key
+  writeKey: 'F3jNWbkBDsRFbrHAiSckIkBLuXwH4Fbn', // replace with your key
 });
 
-// Hash email into a consistent user ID
+// Hash function to generate user ID from email
 function hashEmail(email) {
   if (!email) return null;
-  let hash = 0,
-    i,
-    chr;
-  for (i = 0; i < email.length; i++) {
-    chr = email.charCodeAt(i);
-    hash = (hash << 5) - hash + chr;
-    hash |= 0; // Convert to 32bit integer
+  let hash = 0;
+  for (let i = 0; i < email.length; i++) {
+    hash = (hash << 5) - hash + email.charCodeAt(i);
+    hash |= 0; // Convert to 32-bit int
   }
   return 'user_' + Math.abs(hash);
 }
@@ -37,21 +33,10 @@ function hashEmail(email) {
 function PageTracker() {
   const analytics = useAnalytics();
   const location = useLocation();
-  const lastTrackedPathRef = useRef(null);
-  const initialLoadRef = useRef(true);
+  const lastPathRef = useRef(null);
 
   useEffect(() => {
-    const path = location.pathname;
-
-    // Skip on first render if already tracked
-    if (initialLoadRef.current) {
-      initialLoadRef.current = false;
-      if (lastTrackedPathRef.current === path) {
-        return;
-      }
-    }
-
-    if (lastTrackedPathRef.current === path) return;
+    if (lastPathRef.current === location.pathname) return;
 
     const pageNameMap = {
       '/': 'Home Page',
@@ -60,10 +45,12 @@ function PageTracker() {
       '/article-racket': 'Racket Guide Page',
     };
 
-    const pageName = pageNameMap[path] || 'Unknown Page';
+    const pageName = pageNameMap[location.pathname] || 'Unknown Page';
+
     console.log('Tracking page view:', pageName);
     analytics.page(pageName);
-    lastTrackedPathRef.current = path;
+
+    lastPathRef.current = location.pathname;
   }, [location, analytics]);
 
   return null;
@@ -75,6 +62,10 @@ function Home({
   setUserId,
   newsletterEmail,
   setNewsletterEmail,
+  newsletterFirstName,
+  setNewsletterFirstName,
+  newsletterLastName,
+  setNewsletterLastName,
   purchaseEmail,
   setPurchaseEmail,
   purchasePackage,
@@ -92,18 +83,26 @@ function Home({
     e.preventDefault();
     const newUserId = hashEmail(newsletterEmail);
     setUserId(newUserId);
-    analytics.identify(newUserId, { email: newsletterEmail });
-    analytics.track('Newsletter Signup', { email: newsletterEmail });
+    analytics.identify(newUserId, {
+      email: newsletterEmail,
+      firstName: newsletterFirstName,
+      lastName: newsletterLastName,
+    });
+    analytics.track('Newsletter Signup', {
+      email: newsletterEmail,
+    });
     alert('Thanks for signing up!');
     setNewsletterEmail('');
+    setNewsletterFirstName('');
+    setNewsletterLastName('');
   };
 
   const handlePurchase = (e) => {
     e.preventDefault();
-    const newUserId = hashEmail(purchaseEmail);
+    const newUserId = userId || hashEmail(purchaseEmail);
     if (!userId) setUserId(newUserId);
     analytics.identify(newUserId, { email: purchaseEmail });
-    analytics.track('Order Completed', {
+    analytics.track('Coaching Package Purchased', {
       package: purchasePackage,
       email: purchaseEmail,
     });
@@ -116,31 +115,19 @@ function Home({
     <div className="container">
       <h1>Ace Tennis Coach</h1>
       <nav>
-        <button
-          className="link-button"
-          onClick={() => handleArticleClick('/', 'Home Page')}
-        >
+        <button className="link-button" onClick={() => handleArticleClick('/', 'Home Page')}>
           Home
         </button>{' '}
         |{' '}
-        <button
-          className="link-button"
-          onClick={() => handleArticleClick('/article-serve', 'Serve Tips')}
-        >
+        <button className="link-button" onClick={() => handleArticleClick('/article-serve', 'Serve Tips')}>
           Serve Tips
         </button>{' '}
         |{' '}
-        <button
-          className="link-button"
-          onClick={() => handleArticleClick('/article-footwork', 'Footwork Tips')}
-        >
+        <button className="link-button" onClick={() => handleArticleClick('/article-footwork', 'Footwork Tips')}>
           Footwork
         </button>{' '}
         |{' '}
-        <button
-          className="link-button"
-          onClick={() => handleArticleClick('/article-racket', 'Racket Guide')}
-        >
+        <button className="link-button" onClick={() => handleArticleClick('/article-racket', 'Racket Guide')}>
           Choosing a Racket
         </button>
       </nav>
@@ -153,6 +140,20 @@ function Home({
       <section>
         <h3>Sign Up for Our Newsletter</h3>
         <form onSubmit={handleNewsletterSubmit}>
+          <input
+            type="text"
+            placeholder="First name"
+            value={newsletterFirstName}
+            onChange={(e) => setNewsletterFirstName(e.target.value)}
+            required
+          />
+          <input
+            type="text"
+            placeholder="Last name"
+            value={newsletterLastName}
+            onChange={(e) => setNewsletterLastName(e.target.value)}
+            required
+          />
           <input
             type="email"
             placeholder="Your email"
@@ -191,7 +192,6 @@ function Home({
   );
 }
 
-// Article components
 const ArticleServe = () => (
   <div className="container">
     <h2>Master Your Serve</h2>
@@ -213,10 +213,11 @@ const ArticleRacket = () => (
   </div>
 );
 
-// Main App component
 function App() {
   const [userId, setUserId] = useState(null);
   const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [newsletterFirstName, setNewsletterFirstName] = useState('');
+  const [newsletterLastName, setNewsletterLastName] = useState('');
   const [purchaseEmail, setPurchaseEmail] = useState('');
   const [purchasePackage, setPurchasePackage] = useState('');
 
@@ -233,6 +234,10 @@ function App() {
                 setUserId={setUserId}
                 newsletterEmail={newsletterEmail}
                 setNewsletterEmail={setNewsletterEmail}
+                newsletterFirstName={newsletterFirstName}
+                setNewsletterFirstName={setNewsletterFirstName}
+                newsletterLastName={newsletterLastName}
+                setNewsletterLastName={setNewsletterLastName}
                 purchaseEmail={purchaseEmail}
                 setPurchaseEmail={setPurchaseEmail}
                 purchasePackage={purchasePackage}
